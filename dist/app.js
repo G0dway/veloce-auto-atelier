@@ -1,36 +1,17 @@
 (() => {
   'use strict';
 
-  const cars = [
-    {
-      brand: 'PORSCHE', name: 'Porsche 911', shortName: '911', type: 'sport',
-      image: 'assets/porsche-silver.jpg', alt: 'Серебристый Porsche 911, вид спереди в три четверти',
-      meta: 'Купе · Бензин', price: 'от 18,9 млн ₽', body: 'Купе', engine: 'Бензин', character: 'Точность',
-      description: 'Узнаваемый силуэт и особенное ощущение связи с дорогой. Для тех, кто выбирает автомобиль не только по маршруту, но и по тому, как он проходит каждый поворот.'
-    },
-    {
-      brand: 'MERCEDES-AMG', name: 'Mercedes-AMG GT', shortName: 'GT', type: 'sport',
-      image: 'assets/amg-gt.jpg', alt: 'Матовый серый Mercedes-AMG GT на городской улице',
-      meta: 'Купе · Бензин', price: 'от 16,4 млн ₽', body: 'Купе', engine: 'Бензин', character: 'Сила',
-      description: 'Длинный капот, низкая посадка и выразительные пропорции. Гран-туризмо с характером, который одинаково уместен на вечернем проспекте и на загородной дороге.'
-    },
-    {
-      brand: 'FERRARI', name: 'Ferrari 488', shortName: '488', type: 'sport',
-      image: 'assets/ferrari.jpg', alt: 'Красный Ferrari 488 у современного здания',
-      meta: 'Купе · Бензин', price: 'от 26,5 млн ₽', body: 'Купе', engine: 'Бензин', character: 'Эмоция',
-      description: 'Итальянская скульптура, созданная для движения. Яркий образ и бескомпромиссный спортивный характер превращают даже короткую поездку в отдельное событие.'
-    },
-    {
-      brand: 'RANGE ROVER', name: 'Range Rover', shortName: 'Range Rover', type: 'suv',
-      image: 'assets/range-rover.jpg', alt: 'Белый Range Rover на загородной грунтовой дороге',
-      meta: 'Внедорожник · Дизель', price: 'от 14,8 млн ₽', body: 'Внедорожник', engine: 'Дизель', character: 'Свобода',
-      description: 'Спокойная уверенность в каждом маршруте. Пространство, выразительный дизайн и характер большого путешественника — для города и дорог за его пределами.'
-    }
-  ];
+  let inventoryError = false;
+  let inventory;
+  try { inventory = window.VeloceInventory.normalize(window.VELOCE_INVENTORY_DATA); }
+  catch (_) { inventoryError = true; inventory = { isDemo: true, vehicles: [] }; }
+  const cars = inventory.vehicles;
+  const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+  const htmlCar = (car) => car && Object.fromEntries(Object.entries(car).map(([key, value]) => [key, typeof value === 'string' ? escapeHTML(value) : value]));
 
-  const storageKey = 'veloce-favorites-v1';
+  const storageKey = 'veloce-favorites-v2';
   let favorites = new Set();
-  let activeFilter = 'all';
+  let activeFilter = 'available';
   let requestText = '';
   const $ = (selector) => document.querySelector(selector);
   const signature = '<span class="signature-mark" aria-hidden="true"><i></i><i></i><i></i></span>';
@@ -54,7 +35,7 @@
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
     if (Array.isArray(stored)) {
-      favorites = new Set(stored.filter((id) => Number.isInteger(id) && id >= 0 && id < cars.length));
+      favorites = new Set(stored.filter((id) => typeof id === 'string' && cars.some((car) => car.id === id)));
     }
   } catch (_) {
     favorites = new Set();
@@ -62,11 +43,12 @@
 
   const carGrid = $('#car-grid');
   if (carGrid) {
-    carGrid.innerHTML = cars.map((car, index) => `
+    carGrid.innerHTML = cars.map((record, index) => { const car = htmlCar(record); return `
       <article class="car-card" data-card="${index}" style="--card-index:${index}">
         <button class="car-image" data-car="${index}" aria-label="Подробнее о ${car.name}">
           <img src="${car.image}" alt="${car.alt}" loading="lazy" width="1200" height="800">
           <span class="card-number">${String(index + 1).padStart(2, '0')}</span>
+          <span class="stock-badge stock-${car.status}">${car.statusLabel}</span>
           <span class="car-character">${car.character}</span>
           <span class="car-image-label">Открыть историю ${signature}</span>
         </button>
@@ -80,7 +62,7 @@
             <button class="car-detail-link" data-car="${index}" aria-label="Исследовать ${car.name}">Исследовать ${signature}</button>
           </div>
         </div>
-      </article>`).join('');
+      </article>`; }).join('');
   }
 
   let filterInitialized = false;
@@ -92,7 +74,7 @@
       const index = Number(card.dataset.card);
       const car = cars[index];
       const wasVisible = !card.hidden;
-      const visible = activeFilter === 'all' || (activeFilter === 'saved' ? favorites.has(index) : car.type === activeFilter);
+      const visible = activeFilter === 'saved' ? favorites.has(car.id) : car.status === activeFilter;
       card.hidden = !visible;
       if (!visible) {
         cardAnimations.get(card)?.cancel();
@@ -116,7 +98,7 @@
         }
       }
       const saveButton = card.querySelector('[data-save]');
-      const saved = favorites.has(index);
+      const saved = favorites.has(car.id);
       saveButton.classList.toggle('is-saved', saved);
       saveButton.setAttribute('aria-pressed', String(saved));
       saveButton.setAttribute('aria-label', `${saved ? 'Убрать из избранного' : 'Сохранить'} ${car.name}`);
@@ -127,18 +109,29 @@
       button.setAttribute('aria-pressed', String(active));
     });
     if (carGrid) carGrid.dataset.filter = activeFilter;
+    document.querySelectorAll('[data-status-count]').forEach((element) => {
+      element.textContent = String(cars.filter((car) => car.status === element.dataset.statusCount).length).padStart(2, '0');
+    });
+    document.querySelectorAll('[data-inventory-count]').forEach((element) => { element.textContent = String(cars.length).padStart(2, '0'); });
     const countElement = $('#result-count');
     if (countElement) countElement.textContent = `${String(count).padStart(2, '0')} / ${String(cars.length).padStart(2, '0')}`;
     const empty = $('#empty-state');
-    if (empty) empty.hidden = count > 0;
+    if (empty) {
+      empty.hidden = count > 0;
+      const saved = activeFilter === 'saved';
+      empty.querySelector('h3').textContent = inventoryError ? 'Каталог временно недоступен.' : saved ? 'Место для вашего фаворита.' : 'В этом разделе пока нет автомобилей.';
+      empty.querySelector('p').textContent = inventoryError ? 'Не удалось прочитать данные автомобилей. Попробуйте обновить страницу позже.' : saved ? 'Нажмите на закладку у автомобиля — он появится в вашем гараже.' : 'Выберите другой статус, чтобы продолжить просмотр.';
+      empty.querySelector('button').hidden = !saved;
+    }
     filterInitialized = true;
     document.dispatchEvent(new CustomEvent('veloce:catalog-updated', { detail: { filter: activeFilter, count } }));
   }
 
   function toggleFavorite(index) {
     if (!cars[index]) return;
-    if (favorites.has(index)) favorites.delete(index);
-    else favorites.add(index);
+    const id = cars[index].id;
+    if (favorites.has(id)) favorites.delete(id);
+    else favorites.add(id);
     try { localStorage.setItem(storageKey, JSON.stringify([...favorites])); } catch (_) { /* Favorites still work for this visit. */ }
     applyFilter();
   }
@@ -162,6 +155,7 @@
     if (dialog.open) return;
     dialog.showModal();
     document.body.classList.add('dialog-open');
+    syncAutoplay();
     const animation = animateElement(dialog,
       [{ opacity: 0, transform: 'translateY(24px) scale(.985)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }],
       { duration: 450, easing: 'cubic-bezier(.22,1,.36,1)' });
@@ -203,22 +197,25 @@
 
   function showCar(index) {
     requestOpenTicket += 1;
-    const car = cars[index];
+    const car = htmlCar(cars[index]);
     const content = $('#car-dialog-content');
     if (!car || !content || !carDialog) return;
     content.innerHTML = `
       <img class="detail-image" src="${car.image}" alt="${car.alt}" width="1200" height="800">
       <div class="detail-body">
-        <p class="detail-label">КОЛЛЕКЦИЯ VELOCE / ${String(index + 1).padStart(2, '0')}</p>
+        <p class="detail-label">LADA С ПРОБЕГОМ / ${car.stockNumber} / ${car.statusLabel}</p>
         <h2 id="car-dialog-title">${car.name}</h2>
         <p class="detail-description">${car.description}</p>
         <dl class="detail-specs">
           <div><dt>Кузов</dt><dd>${car.body}</dd></div>
           <div><dt>Двигатель</dt><dd>${car.engine}</dd></div>
-          <div><dt>Характер</dt><dd>${car.character}</dd></div>
+          <div><dt>Коробка</dt><dd>${car.transmission}</dd></div>
+          <div><dt>Год выпуска</dt><dd>${car.year}</dd></div>
+          <div><dt>Пробег</dt><dd>${car.mileage}</dd></div>
+          <div><dt>Статус</dt><dd>${car.statusLabel}</dd></div>
         </dl>
-        <div class="detail-price"><small>Ориентировочная стоимость</small><strong>${car.price}</strong></div>
-        <button class="button button-red" data-pick="${index}">Подобрать этот автомобиль ${signature}</button>
+        <div class="detail-price"><small>${car.status === 'sold' ? 'Цена в демонстрационном объявлении' : 'Демонстрационная стоимость'}</small><strong>${car.price}</strong></div>
+        <button class="button button-red" data-pick="${index}">${car.status === 'available' ? 'Обсудить этот автомобиль' : 'Подобрать похожий автомобиль'} ${signature}</button>
         <p class="detail-note">Демонстрационная подборка. Фото, цены и характеристики иллюстрируют концепцию; наличие и комплектация не подтверждены.</p>
       </div>`;
     carDialog.setAttribute('aria-labelledby', 'car-dialog-title');
@@ -258,7 +255,7 @@
     } else if (button.hasAttribute('data-car')) {
       showCar(Number(button.dataset.car));
     } else if (button.hasAttribute('data-filter')) {
-      if (!['all', 'sport', 'suv', 'saved'].includes(button.dataset.filter)) return;
+      if (!['available', 'reserved', 'sold', 'saved'].includes(button.dataset.filter)) return;
       if (activeFilter !== button.dataset.filter) {
         activeFilter = button.dataset.filter;
         applyFilter();
@@ -297,6 +294,7 @@
         exit.animation.cancel();
       }
       if (!carDialog?.open && !requestDialog?.open) document.body.classList.remove('dialog-open');
+      syncAutoplay();
     });
   });
 
@@ -368,12 +366,14 @@
   function closeMenu() {
     if (mobileMenu) mobileMenu.hidden = true;
     menuToggle?.setAttribute('aria-expanded', 'false');
+    syncAutoplay();
   }
   menuToggle?.addEventListener('click', () => {
     if (!mobileMenu) return;
     const isOpen = mobileMenu.hidden;
     mobileMenu.hidden = !isOpen;
     menuToggle.setAttribute('aria-expanded', String(isOpen));
+    syncAutoplay();
   });
   mobileMenu?.addEventListener('click', (event) => {
     if (event.target.closest('a, [data-open-request]')) closeMenu();
@@ -385,11 +385,17 @@
     }
   });
 
-  const slides = [
-    { image: 'assets/porsche-night.jpg', alt: 'Серебристый Porsche 911 Carrera S в движении по ночному городу', name: 'Porsche 911 Carrera S', carIndex: 0, position: 'center 83%' },
-    { image: 'assets/ferrari.jpg', alt: 'Красный Ferrari 488 у современного здания', name: 'Ferrari 488', carIndex: 2, position: 'center 60%' },
-    { image: 'assets/amg-gt.jpg', alt: 'Матовый серый Mercedes-AMG GT', name: 'Mercedes-AMG GT', carIndex: 1, position: 'center 60%' }
-  ];
+  const slides = cars.map((car, carIndex) => ({ ...car, carIndex })).filter((car) => car.featured).slice(0, 3);
+  const requestSelect = $('#request-car');
+  if (requestSelect) {
+    requestSelect.replaceChildren(new Option('Ещё выбираю', 'Ещё выбираю'), ...cars.map((car) => new Option(car.name, car.name)));
+  }
+  document.querySelectorAll('[data-hero-slide]').forEach((button, index) => {
+    button.hidden = index >= slides.length;
+    if (slides[index]) button.setAttribute('aria-label', `Кадр ${index + 1} — ${slides[index].name}`);
+  });
+  if ($('#hero-total')) $('#hero-total').textContent = String(slides.length).padStart(2, '0');
+  if ($('#hero-discover')) $('#hero-discover').disabled = !slides.length;
   const heroImage = $('#hero-image');
   const heroNextImage = $('#hero-image-next');
   const heroStage = $('.hero-stage');
@@ -402,6 +408,7 @@
 
   function updateHeroLabels() {
     const slide = slides[heroIndex];
+    if (!slide) return;
     const model = $('#hero-model');
     if (model) model.textContent = slide.name;
     const index = $('#hero-index');
@@ -416,6 +423,7 @@
   }
 
   function commitHero(index) {
+    if (!slides[index]) return;
     heroIndex = index;
     const slide = slides[index];
     if (heroImage) {
@@ -456,19 +464,22 @@
     return promise;
   }
 
-  async function selectHero(index) {
+  async function selectHero(index, { automatic = false } = {}) {
     if (!Number.isInteger(index) || !slides[index] || !heroImage) return;
+    clearAutoplay();
     const ticket = ++heroTicket;
     settleHeroTransition();
     if (heroStatus) heroStatus.textContent = '';
     if (index === heroIndex) {
       heroStage?.removeAttribute('aria-busy');
+      syncAutoplay();
       return;
     }
     heroStage?.setAttribute('aria-busy', 'true');
     try {
       await preloadSlide(index);
       if (ticket !== heroTicket) return;
+      if (automatic && !canAutoplay()) { heroStage?.removeAttribute('aria-busy'); return; }
       if (!heroNextImage || !canAnimate(heroImage) || !canAnimate(heroNextImage)) {
         commitHero(index);
         heroStage?.removeAttribute('aria-busy');
@@ -496,8 +507,76 @@
       if (ticket !== heroTicket) return;
       heroStage?.removeAttribute('aria-busy');
       if (heroStatus) heroStatus.textContent = 'Кадр не загрузился. Попробуйте выбрать его ещё раз.';
+    } finally {
+      if (ticket === heroTicket) syncAutoplay();
     }
   }
+
+  const autoplayToggle = $('#hero-autoplay');
+  const heroRoot = $('.hero');
+  const AUTOPLAY_DELAY = 6000;
+  const hoveredControls = new Set();
+  let autoplayTimer = 0;
+  let autoplayPaused = false;
+  let heroInView = true;
+  let heroHasFocus = false;
+  let autoplayDisposed = false;
+
+  function clearAutoplay() {
+    window.clearTimeout(autoplayTimer);
+    autoplayTimer = 0;
+  }
+
+  function canAutoplay() {
+    return slides.length > 1 && !autoplayDisposed && !autoplayPaused && motionAllowed()
+      && !document.hidden && heroInView && !heroHasFocus && !hoveredControls.size
+      && !carDialog?.open && !requestDialog?.open && (!mobileMenu || mobileMenu.hidden);
+  }
+
+  function syncAutoplay() {
+    clearAutoplay();
+    const allowed = motionAllowed() && slides.length > 1;
+    if (autoplayToggle) {
+      autoplayToggle.disabled = !allowed;
+      autoplayToggle.setAttribute('aria-pressed', String(allowed && !autoplayPaused));
+      autoplayToggle.textContent = !allowed ? 'Авто: выкл' : autoplayPaused ? 'Авто' : 'Пауза';
+      autoplayToggle.setAttribute('aria-label', !allowed ? 'Автосмена отключена настройками анимации' : autoplayPaused ? 'Включить автоматическую смену кадров' : 'Приостановить автоматическую смену кадров');
+    }
+    $('#hero-model')?.setAttribute('aria-live', canAutoplay() ? 'off' : 'polite');
+    if (!canAutoplay() || heroTransition || heroStage?.getAttribute('aria-busy') === 'true') return;
+    autoplayTimer = window.setTimeout(() => {
+      autoplayTimer = 0;
+      if (canAutoplay()) selectHero((heroIndex + 1) % slides.length, { automatic: true });
+    }, AUTOPLAY_DELAY);
+  }
+
+  autoplayToggle?.addEventListener('click', () => { autoplayPaused = !autoplayPaused; syncAutoplay(); });
+  [$('.hero-controls'), $('#hero-discover')].filter(Boolean).forEach((element) => {
+    element.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'touch') return;
+      hoveredControls.add(element); syncAutoplay();
+    });
+    element.addEventListener('pointerleave', () => { hoveredControls.delete(element); syncAutoplay(); });
+  });
+  heroRoot?.addEventListener('focusin', (event) => {
+    heroHasFocus = event.target !== autoplayToggle;
+    syncAutoplay();
+  });
+  heroRoot?.addEventListener('focusout', (event) => {
+    heroHasFocus = Boolean(event.relatedTarget && heroRoot.contains(event.relatedTarget) && event.relatedTarget !== autoplayToggle);
+    syncAutoplay();
+  });
+  document.addEventListener('visibilitychange', syncAutoplay);
+  document.addEventListener('DOMContentLoaded', syncAutoplay, { once: true });
+  if ('IntersectionObserver' in window && heroStage) {
+    const autoplayObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.target === heroStage) heroInView = entry.isIntersecting && entry.intersectionRatio >= 0.1;
+      syncAutoplay();
+    }, {threshold: 0.1});
+    autoplayObserver.observe(heroStage);
+  }
+  window.addEventListener('pagehide', () => { autoplayDisposed = true; clearAutoplay(); });
+  window.addEventListener('pageshow', () => { autoplayDisposed = false; syncAutoplay(); });
 
   heroButtons.forEach((button) => {
     button.addEventListener('click', () => selectHero(Number(button.dataset.heroSlide)));
@@ -519,7 +598,7 @@
   });
   $('#hero-discover')?.addEventListener('click', (event) => {
     event.preventDefault();
-    showCar(slides[heroIndex].carIndex);
+    showCar(slides[heroIndex]?.carIndex);
   });
 
   function settleMotion() {
@@ -529,10 +608,12 @@
     if (heroStatus) heroStatus.textContent = '';
     [...activeAnimations].forEach((animation) => animation.cancel());
     cardAnimations.clear();
+    syncAutoplay();
   }
   window.addEventListener('veloce:motion-change', settleMotion);
   motionPreference.addEventListener?.('change', settleMotion);
 
   applyFilter();
   commitHero(0);
+  syncAutoplay();
 })();

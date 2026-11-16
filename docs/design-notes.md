@@ -21,11 +21,15 @@ Standard arrow glyphs and arrow SVGs were removed throughout the site. Actions u
 Motion is original to this implementation:
 
 - Masked headline entrance and a restrained image settling motion.
-- Manually controlled, preloaded image dissolves with protection against fast repeated clicks and failed image loads.
+- Automatic image rotation with a six-second dwell, manual controls, a pause button and preloaded image dissolves with protection against fast repeated clicks and failed image loads.
 - Scroll reveals, bounded photographic parallax, fine progress indicator and small pointer responses on the two main calls to action.
 - Animated catalog filtering and modal transitions, while preserving keyboard use, native scrolling and native pointer behavior.
-- System reduced-motion support and a persistent animation switch. No autoplay or continuous animation loop.
+- System reduced-motion support and a persistent animation switch. Autoplay pauses for interaction, open dialogs, hidden pages and an offscreen hero. Reduced motion and the animation switch disable it. No continuous animation frame loop.
 
 ## Verification
 
 JavaScript syntax, local resources, HTML structure and CSS parsing are checked. DOM checks cover the motion preference, cancellation, catalog, form, numbered carousel and image-load races. Browser visual QA was unavailable because the managed environment did not expose its supported browser-control tool; responsive rendering and perceptual animation quality remain unverified in a real browser.
+
+## LADA inventory update
+
+The assortment now represents used LADA vehicles, with available/reserved/sold status views. Vehicle records live outside the interface code; see [CM Expert integration preparation](cm-expert-integration.md). All stock details remain explicitly illustrative.

@@ -1,52 +1,26 @@
 [
   {
-    "file": "porsche-night.jpg",
-    "model": "Porsche 911 Carrera S (991)",
-    "source": "https://unsplash.com/photos/a-silver-sports-car-driving-on-a-road-i2Pr5OPmjh4",
-    "author": "untldshots",
-    "note": "Hero: 2000px, side view driving at night. Car occupies lower half. Inscription 911 Carrera S visible.",
-    "width": 2000,
-    "height": 1333,
-    "bytes": 430983
+    "file": "dist/assets/lada-vesta.jpg",
+    "model": "LADA Vesta SW Cross",
+    "page": "https://carmaps.ru/lada/vesta-sw-cross/",
+    "image": "https://carmaps.ru/work/photo/gallery/lada-vesta-sw-cross-1.jpg"
   },
   {
-    "file": "porsche-silver.jpg",
-    "model": "Porsche 911 (992)",
-    "source": "https://unsplash.com/photos/iPz9SRBjau4",
-    "author": "Bradikan",
-    "note": "Front three-quarter silver 992, precise trim unverified.",
-    "width": 1600,
-    "height": 985,
-    "bytes": 257985
+    "file": "dist/assets/lada-granta.jpg",
+    "model": "LADA Granta",
+    "page": "https://www.ixbt.com/news/2025/08/26/granta-vesta-lada-2025-37-1-44-2.html",
+    "image": "https://www.ixbt.com/img/n1/news/2025/7/2/lada_large.JPG"
   },
   {
-    "file": "amg-gt.jpg",
-    "model": "Mercedes-AMG GT",
-    "source": "https://unsplash.com/photos/a-sleek-gray-mercedes-amg-gt-sport-car-qGzFSFyFSN0",
-    "author": "Gleb Paniotov",
-    "note": "Front three-quarter matte gray, first-generation GT. Likely GT R but use general AMG GT.",
-    "width": 1200,
-    "height": 674,
-    "bytes": 202271
+    "file": "dist/assets/lada-niva.jpg",
+    "model": "LADA Niva Travel",
+    "page": "https://www.autonews.ru/news/677fdf9e9a79470ae748cb81",
+    "image": "https://s0.rbk.ru/v6_top_pics/media/img/3/90/347364338469903.jpeg"
   },
   {
-    "file": "ferrari.jpg",
-    "model": "Ferrari 488",
-    "source": "https://unsplash.com/photos/IKQ-BBYgXZ8",
-    "author": "Nils Limp",
-    "note": "Red 488, apparent Pista but use Ferrari 488; front three-quarter.",
-    "width": 1200,
-    "height": 800,
-    "bytes": 175936
-  },
-  {
-    "file": "range-rover.jpg",
-    "model": "Range Rover",
-    "source": "https://unsplash.com/photos/pb_1XXdKldQ",
-    "author": "Zakaria Zayane",
-    "note": "White Range Rover L405 facelift, offroad frontal.",
-    "width": 1200,
-    "height": 800,
-    "bytes": 184105
+    "file": "dist/assets/lada-largus.jpg",
+    "model": "LADA Largus Cross",
+    "page": "https://www.kolesa.ru/news/proizvodstvo-lada-largus-v-izhevske-startuet-v-sleduyushchem-godu",
+    "image": "https://kolesa-uploads.ru/-/2397d7ae-d619-4fb5-8f85-f1eb34b9c859/lada-largus-cross-140.jpg"
   }
 ]

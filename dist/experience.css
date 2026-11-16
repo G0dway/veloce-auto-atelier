@@ -101,3 +101,12 @@ html[data-motion=off] .motion-pending{opacity:1;transform:none}html[data-motion=
 @media(prefers-reduced-motion:reduce){:root{scroll-behavior:auto}.motion-pending{opacity:1;transform:none}.hero-visual{transform:none!important}[data-magnetic]{transform:none!important}*,*:before,*:after{animation:none!important;transition:none!important}}
 
 .car-image-label .signature-mark{width:13px;height:10px;gap:2px}.car-image-label .signature-mark i{width:2px;height:9px}
+/* Used LADA inventory and optional hero autoplay */
+.stock-badge{position:absolute;z-index:2;left:51px;top:16px;padding:6px 9px;font-size:8px;letter-spacing:.45px;line-height:1.3;background:#f2f0e9ed;color:var(--ink)}
+.stock-reserved{background:#d6bd98ed}.stock-sold{background:#222720dc;color:var(--paper)}
+.car-grid[data-filter=available] .car-card:nth-child(even){margin-top:76px}
+.hero-controls .hero-autoplay{order:5;width:65px;justify-content:center;align-items:center;padding:0 0 10px;margin-left:6px;font-size:8px;color:var(--paper);border-bottom:1px solid #f2f0e944;letter-spacing:.6px}
+.hero-controls .hero-autoplay[aria-pressed=false]{color:#aeb7a8}.hero-controls .hero-autoplay:disabled{opacity:.5}
+@media(max-width:1100px){.car-grid[data-filter=available] .car-card:nth-child(even){margin-top:55px}}
+@media(max-width:760px){.car-grid[data-filter=available] .car-card:nth-child(even){margin-top:0}.hero-controls{gap:10px}.hero-controls button{width:39px}.hero-controls .hero-autoplay{width:62px;margin-left:0;font-size:7px;padding-bottom:5px}.scene-count{font-size:7px}.stock-badge{top:14px;left:45px;font-size:7px;padding:6px 8px}.filters{gap:17px}.filters button{font-size:9px}}
+@media(max-width:365px){.filters{gap:11px}.filters button{font-size:8px}}
