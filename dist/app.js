@@ -33,7 +33,22 @@
   let activeFilter = 'all';
   let requestText = '';
   const $ = (selector) => document.querySelector(selector);
-  const arrow = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.5"/></svg>';
+  const signature = '<span class="signature-mark" aria-hidden="true"><i></i><i></i><i></i></span>';
+  const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const activeAnimations = new Set();
+  const motionAllowed = () => !motionPreference.matches && document.documentElement.dataset.motion !== 'off';
+  const canAnimate = (element) => motionAllowed() && typeof element?.animate === 'function';
+
+  function trackAnimation(animation) {
+    activeAnimations.add(animation);
+    animation.finished.then(() => activeAnimations.delete(animation), () => activeAnimations.delete(animation));
+    return animation;
+  }
+
+  function animateElement(element, frames, options) {
+    if (!canAnimate(element)) return null;
+    return trackAnimation(element.animate(frames, options));
+  }
   const bookmark = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M6.5 4.5h11v15L12 16l-5.5 3.5z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 
   try {
@@ -48,10 +63,12 @@
   const carGrid = $('#car-grid');
   if (carGrid) {
     carGrid.innerHTML = cars.map((car, index) => `
-      <article class="car-card" data-card="${index}">
+      <article class="car-card" data-card="${index}" style="--card-index:${index}">
         <button class="car-image" data-car="${index}" aria-label="Подробнее о ${car.name}">
           <img src="${car.image}" alt="${car.alt}" loading="lazy" width="1200" height="800">
           <span class="card-number">${String(index + 1).padStart(2, '0')}</span>
+          <span class="car-character">${car.character}</span>
+          <span class="car-image-label">Открыть историю ${signature}</span>
         </button>
         <button class="save-car" data-save="${index}" aria-pressed="false" aria-label="Сохранить ${car.name}">${bookmark}</button>
         <div class="car-info">
@@ -60,20 +77,44 @@
           <p class="car-meta">${car.meta}</p>
           <div class="car-bottom">
             <span class="car-price">${car.price}</span>
-            <button class="round-arrow" data-car="${index}" aria-label="Подробнее о ${car.name}">${arrow}</button>
+            <button class="car-detail-link" data-car="${index}" aria-label="Исследовать ${car.name}">Исследовать ${signature}</button>
           </div>
         </div>
       </article>`).join('');
   }
 
+  let filterInitialized = false;
+  const cardAnimations = new Map();
   function applyFilter() {
     let count = 0;
+    let entering = 0;
     document.querySelectorAll('[data-card]').forEach((card) => {
       const index = Number(card.dataset.card);
       const car = cars[index];
+      const wasVisible = !card.hidden;
       const visible = activeFilter === 'all' || (activeFilter === 'saved' ? favorites.has(index) : car.type === activeFilter);
       card.hidden = !visible;
-      if (visible) count += 1;
+      if (!visible) {
+        cardAnimations.get(card)?.cancel();
+        cardAnimations.delete(card);
+      }
+      if (visible) {
+        count += 1;
+        if (filterInitialized && !wasVisible) {
+          cardAnimations.get(card)?.cancel();
+          const animation = animateElement(card,
+            [{ opacity: 0, transform: 'translateY(20px)' }, { opacity: 1, transform: 'translateY(0)' }],
+            { duration: 480, delay: Math.min(entering * 65, 195), easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' });
+          if (animation) {
+            cardAnimations.set(card, animation);
+            const cleanup = () => {
+              if (cardAnimations.get(card) === animation) cardAnimations.delete(card);
+            };
+            animation.finished.then(cleanup, cleanup);
+          }
+          entering += 1;
+        }
+      }
       const saveButton = card.querySelector('[data-save]');
       const saved = favorites.has(index);
       saveButton.classList.toggle('is-saved', saved);
@@ -85,10 +126,13 @@
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
     });
+    if (carGrid) carGrid.dataset.filter = activeFilter;
     const countElement = $('#result-count');
     if (countElement) countElement.textContent = `${String(count).padStart(2, '0')} / ${String(cars.length).padStart(2, '0')}`;
     const empty = $('#empty-state');
     if (empty) empty.hidden = count > 0;
+    filterInitialized = true;
+    document.dispatchEvent(new CustomEvent('veloce:catalog-updated', { detail: { filter: activeFilter, count } }));
   }
 
   function toggleFavorite(index) {
@@ -104,17 +148,61 @@
   const requestForm = $('#request-form');
   const requestSuccess = $('#request-success');
 
+  const dialogEntries = new Map();
+  const dialogExits = new Map();
+  let requestOpenTicket = 0;
+
   function showDialog(dialog) {
-    if (!dialog || dialog.open) return;
+    if (!dialog) return;
+    const exit = dialogExits.get(dialog);
+    if (exit) {
+      dialogExits.delete(dialog);
+      exit.animation.cancel();
+    }
+    if (dialog.open) return;
     dialog.showModal();
     document.body.classList.add('dialog-open');
+    const animation = animateElement(dialog,
+      [{ opacity: 0, transform: 'translateY(24px) scale(.985)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }],
+      { duration: 450, easing: 'cubic-bezier(.22,1,.36,1)' });
+    if (animation) {
+      dialogEntries.set(dialog, animation);
+      const cleanup = () => { if (dialogEntries.get(dialog) === animation) dialogEntries.delete(dialog); };
+      animation.finished.then(cleanup, cleanup);
+    }
   }
 
-  function closeDialog(dialog) {
-    if (dialog && dialog.open) dialog.close();
+  function closeDialog(dialog, immediate = false) {
+    if (!dialog?.open) return Promise.resolve();
+    dialogEntries.get(dialog)?.cancel();
+    dialogEntries.delete(dialog);
+    const previousExit = dialogExits.get(dialog);
+    if (previousExit && !immediate) return previousExit.promise;
+    if (previousExit) {
+      dialogExits.delete(dialog);
+      previousExit.animation.cancel();
+    }
+    if (immediate || !canAnimate(dialog)) {
+      dialog.close();
+      return Promise.resolve();
+    }
+    const animation = animateElement(dialog,
+      [{ opacity: 1, transform: 'translateY(0) scale(1)' }, { opacity: 0, transform: 'translateY(16px) scale(.99)' }],
+      { duration: 220, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+    const job = { animation, promise: null };
+    const finish = () => {
+      if (dialogExits.get(dialog) !== job) return;
+      dialogExits.delete(dialog);
+      if (dialog.open) dialog.close();
+      animation.cancel();
+    };
+    job.promise = animation.finished.then(finish, finish);
+    dialogExits.set(dialog, job);
+    return job.promise;
   }
 
   function showCar(index) {
+    requestOpenTicket += 1;
     const car = cars[index];
     const content = $('#car-dialog-content');
     if (!car || !content || !carDialog) return;
@@ -130,7 +218,7 @@
           <div><dt>Характер</dt><dd>${car.character}</dd></div>
         </dl>
         <div class="detail-price"><small>Ориентировочная стоимость</small><strong>${car.price}</strong></div>
-        <button class="button button-red" data-pick="${index}">Подобрать этот автомобиль ${arrow}</button>
+        <button class="button button-red" data-pick="${index}">Подобрать этот автомобиль ${signature}</button>
         <p class="detail-note">Демонстрационная подборка. Фото, цены и характеристики иллюстрируют концепцию; наличие и комплектация не подтверждены.</p>
       </div>`;
     carDialog.setAttribute('aria-labelledby', 'car-dialog-title');
@@ -148,8 +236,10 @@
     requestDialog?.setAttribute('aria-labelledby', 'request-title');
   }
 
-  function openRequest(index) {
-    closeDialog(carDialog);
+  async function openRequest(index) {
+    const ticket = ++requestOpenTicket;
+    await closeDialog(carDialog);
+    if (ticket !== requestOpenTicket) return;
     resetRequest();
     const select = $('#request-car');
     if (select && cars[index]) {
@@ -169,8 +259,10 @@
       showCar(Number(button.dataset.car));
     } else if (button.hasAttribute('data-filter')) {
       if (!['all', 'sport', 'suv', 'saved'].includes(button.dataset.filter)) return;
-      activeFilter = button.dataset.filter;
-      applyFilter();
+      if (activeFilter !== button.dataset.filter) {
+        activeFilter = button.dataset.filter;
+        applyFilter();
+      }
     } else if (button.hasAttribute('data-pick')) {
       openRequest(Number(button.dataset.pick));
     } else if (button.hasAttribute('data-open-request')) {
@@ -191,7 +283,19 @@
       const bounds = dialog.getBoundingClientRect();
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeDialog(dialog);
     });
+    dialog.addEventListener('cancel', (event) => {
+      if (!canAnimate(dialog)) return;
+      event.preventDefault();
+      closeDialog(dialog);
+    });
     dialog.addEventListener('close', () => {
+      dialogEntries.get(dialog)?.cancel();
+      dialogEntries.delete(dialog);
+      const exit = dialogExits.get(dialog);
+      if (exit) {
+        dialogExits.delete(dialog);
+        exit.animation.cancel();
+      }
       if (!carDialog?.open && !requestDialog?.open) document.body.classList.remove('dialog-open');
     });
   });
@@ -282,53 +386,153 @@
   });
 
   const slides = [
-    { image: 'assets/porsche-night.jpg', alt: 'Серебристый Porsche 911 Carrera S в движении по ночному городу', name: 'Porsche 911 Carrera S', carIndex: 0 },
-    { image: 'assets/ferrari.jpg', alt: 'Красный Ferrari 488 у современного здания', name: 'Ferrari 488', carIndex: 2 },
-    { image: 'assets/amg-gt.jpg', alt: 'Матовый серый Mercedes-AMG GT', name: 'Mercedes-AMG GT', carIndex: 1 }
+    { image: 'assets/porsche-night.jpg', alt: 'Серебристый Porsche 911 Carrera S в движении по ночному городу', name: 'Porsche 911 Carrera S', carIndex: 0, position: 'center 83%' },
+    { image: 'assets/ferrari.jpg', alt: 'Красный Ferrari 488 у современного здания', name: 'Ferrari 488', carIndex: 2, position: 'center 60%' },
+    { image: 'assets/amg-gt.jpg', alt: 'Матовый серый Mercedes-AMG GT', name: 'Mercedes-AMG GT', carIndex: 1, position: 'center 60%' }
   ];
+  const heroImage = $('#hero-image');
+  const heroNextImage = $('#hero-image-next');
+  const heroStage = $('.hero-stage');
+  const heroStatus = $('#hero-status');
+  const heroButtons = [...document.querySelectorAll('[data-hero-slide]')];
+  const loadedSlides = new Map();
   let heroIndex = 0;
-  function updateHero() {
+  let heroTicket = 0;
+  let heroTransition = null;
+
+  function updateHeroLabels() {
     const slide = slides[heroIndex];
-    const heroImage = $('#hero-image');
-    if (heroImage) {
-      heroImage.src = slide.image;
-      heroImage.alt = slide.alt;
-      heroImage.style.objectPosition = heroIndex === 0 ? 'center 83%' : 'center 60%';
-    }
     const model = $('#hero-model');
     if (model) model.textContent = slide.name;
     const index = $('#hero-index');
     if (index) index.textContent = String(heroIndex + 1).padStart(2, '0');
-    const discover = $('#hero-discover');
-    if (discover) discover.setAttribute('aria-label', `Подробнее о ${slide.name}`);
-  }
-  $('#hero-prev')?.addEventListener('click', () => { heroIndex = (heroIndex - 1 + slides.length) % slides.length; updateHero(); });
-  $('#hero-next')?.addEventListener('click', () => { heroIndex = (heroIndex + 1) % slides.length; updateHero(); });
-  $('#hero-discover')?.addEventListener('click', (event) => { event.preventDefault(); showCar(slides[heroIndex].carIndex); });
-
-  const reveals = [...document.querySelectorAll('.reveal')];
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  if ('IntersectionObserver' in window && !reducedMotion.matches) {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.08 });
-    reveals.forEach((element) => observer.observe(element));
-    document.documentElement.classList.add('js');
-    reducedMotion.addEventListener?.('change', (event) => {
-      if (event.matches) {
-        observer.disconnect();
-        reveals.forEach((element) => element.classList.add('is-visible'));
-      }
+    $('#hero-discover')?.setAttribute('aria-label', `Подробнее о ${slide.name}`);
+    if (heroStage) heroStage.dataset.slide = String(heroIndex);
+    heroButtons.forEach((button) => {
+      const selected = Number(button.dataset.heroSlide) === heroIndex;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-pressed', String(selected));
     });
-  } else {
-    reveals.forEach((element) => element.classList.add('is-visible'));
   }
+
+  function commitHero(index) {
+    heroIndex = index;
+    const slide = slides[index];
+    if (heroImage) {
+      heroImage.src = slide.image;
+      heroImage.alt = slide.alt;
+      heroImage.style.objectPosition = slide.position;
+      heroImage.style.opacity = '1';
+    }
+    if (heroNextImage) heroNextImage.style.opacity = '0';
+    updateHeroLabels();
+  }
+
+  function settleHeroTransition() {
+    const transition = heroTransition;
+    if (!transition) return;
+    heroTransition = null;
+    commitHero(transition.index);
+    transition.animations.forEach((animation) => animation.cancel());
+  }
+
+  function preloadSlide(index) {
+    if (loadedSlides.has(index)) return loadedSlides.get(index);
+    const promise = new Promise((resolve, reject) => {
+      const image = new Image();
+      const fail = () => reject(new Error('Image unavailable'));
+      image.onload = () => {
+        if (typeof image.decode !== 'function') resolve();
+      };
+      image.onerror = fail;
+      image.src = slides[index].image;
+      if (typeof image.decode === 'function') image.decode().then(resolve, fail);
+      else if (image.complete && image.naturalWidth > 0) resolve();
+    }).catch((error) => {
+      loadedSlides.delete(index);
+      throw error;
+    });
+    loadedSlides.set(index, promise);
+    return promise;
+  }
+
+  async function selectHero(index) {
+    if (!Number.isInteger(index) || !slides[index] || !heroImage) return;
+    const ticket = ++heroTicket;
+    settleHeroTransition();
+    if (heroStatus) heroStatus.textContent = '';
+    if (index === heroIndex) {
+      heroStage?.removeAttribute('aria-busy');
+      return;
+    }
+    heroStage?.setAttribute('aria-busy', 'true');
+    try {
+      await preloadSlide(index);
+      if (ticket !== heroTicket) return;
+      if (!heroNextImage || !canAnimate(heroImage) || !canAnimate(heroNextImage)) {
+        commitHero(index);
+        heroStage?.removeAttribute('aria-busy');
+        return;
+      }
+      heroNextImage.src = slides[index].image;
+      heroNextImage.alt = '';
+      heroNextImage.style.objectPosition = slides[index].position;
+      heroIndex = index;
+      updateHeroLabels();
+      const transition = { index, animations: [] };
+      heroTransition = transition;
+      transition.animations.push(animateElement(heroImage,
+        [{ transform: 'scale(1)' }, { transform: 'scale(1.025)' }],
+        { duration: 850, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' }));
+      const incoming = animateElement(heroNextImage,
+        [{ opacity: 0, transform: 'scale(1.06)' }, { opacity: 1, transform: 'scale(1)' }],
+        { duration: 850, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+      transition.animations.push(incoming);
+      try { await incoming.finished; } catch (_) { /* A newer selection owns the visible scene. */ }
+      if (ticket !== heroTicket || heroTransition !== transition) return;
+      settleHeroTransition();
+      heroStage?.removeAttribute('aria-busy');
+    } catch (_) {
+      if (ticket !== heroTicket) return;
+      heroStage?.removeAttribute('aria-busy');
+      if (heroStatus) heroStatus.textContent = 'Кадр не загрузился. Попробуйте выбрать его ещё раз.';
+    }
+  }
+
+  heroButtons.forEach((button) => {
+    button.addEventListener('click', () => selectHero(Number(button.dataset.heroSlide)));
+  });
+  $('.hero-controls')?.addEventListener('keydown', (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const current = event.target.closest('[data-hero-slide]');
+    if (!current) return;
+    const currentIndex = Number(current.dataset.heroSlide);
+    let nextIndex;
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + slides.length) % slides.length;
+    else if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % slides.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = slides.length - 1;
+    else return;
+    event.preventDefault();
+    heroButtons.find((button) => Number(button.dataset.heroSlide) === nextIndex)?.focus();
+    selectHero(nextIndex);
+  });
+  $('#hero-discover')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    showCar(slides[heroIndex].carIndex);
+  });
+
+  function settleMotion() {
+    heroTicket += 1;
+    settleHeroTransition();
+    heroStage?.removeAttribute('aria-busy');
+    if (heroStatus) heroStatus.textContent = '';
+    [...activeAnimations].forEach((animation) => animation.cancel());
+    cardAnimations.clear();
+  }
+  window.addEventListener('veloce:motion-change', settleMotion);
+  motionPreference.addEventListener?.('change', settleMotion);
 
   applyFilter();
-  updateHero();
+  commitHero(0);
 })();

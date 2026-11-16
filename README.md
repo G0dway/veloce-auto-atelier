@@ -1,9 +1,26 @@
-# VELOCE
+# VELOCE — характер в движении
 
-A Russian-language concept website for an independent premium car gallery.
+Концептуальный сайт автомобильной галереи. HTML, CSS и JavaScript без сборки и сторонних runtime-зависимостей.
 
-Buildless HTML, CSS and JavaScript. Static entrypoint: `dist/index.html`.
+[Открыть сайт](https://veloce-auto-atelier-0616.an-dyrivera3604.chatgpt.site) · [Дизайн и референсы](docs/design-notes.md)
 
-Features: car collection filters, browser-local favorites, vehicle dialogs, hero carousel, mobile navigation, and a demo request builder with a local text-file download. Contact details are never sent to a server. All vehicles, prices and availability are illustrative. Image credits are in `asset-sources.json`.
+## Возможности
 
-Hosting configuration is in `.openai/hosting.json`.
+- Полноэкранная фотосцена с цифровой навигацией и плавными переходами.
+- Появление заголовков и секций, лёгкий параллакс, анимации карточек и диалогов.
+- Каталог с фильтрами и избранным, которое сохраняется в браузере.
+- Доступное управление с клавиатуры, системный reduced motion и выключатель анимации.
+- Демонстрационная заявка со скачиванием TXT. Контактные данные не отправляются на сервер.
+
+Все автомобили, цены и сведения о комплектациях иллюстративные. Фотографии и шрифты находятся локально в `dist/assets`; источники фотографий — в `asset-sources.json`.
+
+## Структура
+
+- `dist/index.html` — страница и диалоги.
+- `dist/style.css` — базовая типографика, сетка и формы.
+- `dist/experience.css` — визуальное оформление второй версии и анимационные состояния.
+- `dist/app.js` — каталог, избранное, форма и фотогалерея.
+- `dist/motion.js` — анимации и настройки движения.
+- `.openai/hosting.json` — конфигурация существующего сайта Sites.
+
+Для обычного статического хостинга используйте содержимое `dist/`. Локально откройте `dist/index.html` в современном браузере или используйте любой сервер статических файлов.
